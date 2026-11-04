@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grape Disease Weather-Based Forecasting System</title>
+<style>
+:root{--bg:#f4f7f5;--card:#fff;--ink:#18312a;--muted:#65766f;--line:#dce6e0;--green:#176b45;--green2:#e6f4eb;--amber:#a45b00;--amberbg:#fff3dc;--red:#a52a2a;--redbg:#fdeaea;--graybg:#eef1ef;--shadow:0 8px 24px rgba(22,55,39,.07)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+header{background:linear-gradient(120deg,#124b35,#24764d);color:white;padding:28px max(20px,calc((100% - 1220px)/2))}
+header h1{margin:0 0 5px;font-size:clamp(23px,3vw,32px)}header p{margin:0;color:#d9eee1}
+main{max-width:1220px;margin:22px auto;padding:0 18px 40px}.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:19px;margin-bottom:17px;box-shadow:var(--shadow)}
+h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:0 0 9px}.muted,.hint{color:var(--muted)}.hint{font-size:12px}
+.controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:end}
+label{display:block;font-weight:650;font-size:13px;margin-bottom:5px}input{width:100%;padding:10px 11px;border:1px solid #cbd8d0;border-radius:9px;font:inherit;color:var(--ink);background:white}
+button{border:0;border-radius:10px;padding:11px 16px;font-weight:700;font:inherit;cursor:pointer;background:var(--green);color:white}
+button.secondary{background:#e8f0eb;color:#204b35;border:1px solid #cbdcd0}button:disabled{opacity:.55;cursor:wait}
+.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}.status{margin-top:10px;font-size:13px;color:var(--muted);min-height:20px}.error{color:var(--red)}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.kpi{background:#f7faf8;border:1px solid var(--line);border-radius:12px;padding:13px}.kpi strong{display:block;font-size:23px}.kpi span{font-size:12px;color:var(--muted)}
+.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:720px}th,td{text-align:left;padding:10px 11px;border-bottom:1px solid var(--line);font-size:13px;white-space:nowrap}th{background:#f4f8f5;color:#3c5549;font-size:12px;position:sticky;top:0}td input{min-width:82px;padding:7px 8px;font-size:13px}.day{font-weight:700}
+.pill{display:inline-block;padding:4px 9px;border-radius:99px;font-size:11px;font-weight:750}.favourable{background:var(--redbg);color:var(--red)}.partial{background:var(--amberbg);color:var(--amber)}.not{background:var(--green2);color:var(--green)}.unknown{background:var(--graybg);color:#58645e}
+.disease-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.disease{border:1px solid var(--line);border-radius:12px;padding:14px}.disease-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.disease p{margin:8px 0 0;font-size:12px;color:var(--muted)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+footer{max-width:1220px;margin:0 auto;padding:0 18px 28px;color:var(--muted);font-size:12px}
+@media(max-width:850px){.controls{grid-template-columns:repeat(2,1fr)}.kpis{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.controls,.disease-grid{grid-template-columns:1fr}.panel{padding:14px}header{padding:23px 18px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Grape Disease Weather-Based Forecasting System</h1>
+  <p>Five-day weather forecast · Threshold-based disease favourability assessment</p>
+</header>
+<main>
+<section class="panel">
+  <h2>1. Forecast location and data source</h2>
+  <div class="controls">
+    <div><label for="place">Location label</label><input id="place" value="ICAR-NRCG, Pune"></div>
+    <div><label for="lat">Latitude</label><input id="lat" type="number" step="any" value="18.4960"></div>
+    <div><label for="lon">Longitude</label><input id="lon" type="number" step="any" value="73.9400"></div>
+    <div><label for="timezone">Time zone</label><input id="timezone" value="auto" readonly></div>
+  </div>
+  <div class="actions">
+    <button id="fetchBtn" onclick="fetchForecast()">Fetch 5-day forecast</button>
+    <button class="secondary" onclick="downloadCSV()">Export forecast and disease assessment (CSV)</button>
+  </div>
+  <div id="apiStatus" class="status">Weather data source: Open-Meteo forecast API. Internet access is required to fetch updated data.</div>
+</section>
+
+<section class="panel">
+  <h2>2. Five-day weather forecast and manual inputs</h2>
+  <p class="hint">Minimum, average and maximum temperature and relative humidity, rainfall and solar radiation are fetched from the API. Disease thresholds are evaluated using daily average temperature and daily average relative humidity, not the min–max range.</p>
+  <div class="table-wrap">
+    <table id="weatherTable">
+      <thead><tr>
+        <th>Date</th><th>Min temp (°C)</th><th>Average temp (°C)</th><th>Max temp (°C)</th><th>Min RH (%)</th><th>Average RH (%)</th><th>Max RH (%)</th><th>Rainfall (mm)</th><th>Solar radiation (MJ/m²/day)</th>
+      </tr></thead>
+      <tbody id="weatherBody"><tr><td colspan="9" class="muted">Fetch the forecast to populate the five days.</td></tr></tbody>
+    </table>
+  </div>
+  <div class="actions"><button class="secondary" onclick="assessDiseases()">Assess disease favourability</button></div>
+  <div class="hint">Disease assessment uses daily average temperature, daily average relative humidity and daily rainfall. Minimum and maximum values are shown for reference only. Solar radiation is displayed but is not used in the disease rules.</div>
+</section>
+
+<section class="panel">
+  <h2>3. Five-day disease favourability assessment</h2>
+  <div class="legend">
+    <span><i class="dot" style="background:#b83232"></i>Favourable — all applicable criteria met</span>
+    <span><i class="dot" style="background:#d58a18"></i>Partially favourable — some criteria met</span>
+    <span><i class="dot" style="background:#238653"></i>Not favourable — no criteria met</span>
+    <span><i class="dot" style="background:#87918b"></i>Insufficient data</span>
+  </div>
+  <div id="diseaseResults" class="disease-grid" style="margin-top:14px">
+    <div class="muted">Disease results will appear after fetching the five-day forecast.</div>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>4. Thresholds used</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Disease</th><th>Average temperature</th><th>Average relative humidity</th><th>Rainfall</th><th>Leaf wetness</th></tr></thead>
+    <tbody>
+      <tr><td>Anthracnose</td><td>24–26°C</td><td>≥80%</td><td>Not assessed*</td><td>Excluded</td></tr>
+      <tr><td>Downy mildew</td><td>17–28°C</td><td>≥70%</td><td>Daily ≥10 mm</td><td>Excluded</td></tr>
+      <tr><td>Bacterial leaf spot</td><td>20–30°C</td><td>≥80%</td><td>Daily ≥10 mm</td><td>Excluded</td></tr>
+      <tr><td>Powdery mildew</td><td>21–30°C</td><td>60–85%</td><td>Daily &lt;10 mm</td><td>Not specified</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+<section class="panel">
+  <h2>5. Interpretation and limitations</h2>
+  <ul class="hint">
+    <li>Temperature thresholds are evaluated using the API's daily average temperature. Minimum and maximum temperatures are displayed for reference only and do not determine disease favourability.</li>
+    <li>Relative-humidity thresholds are evaluated using the API's daily average RH. Minimum and maximum RH are displayed for reference only and do not determine disease favourability.</li>
+    <li>Rainfall thresholds use the forecast daily precipitation total. Leaf wetness and continuous rainfall duration are excluded. Anthracnose rainfall is not assessed because its original criterion was continuous rain duration.</li>
+    <li>Powdery mildew has no leaf-wetness threshold in the values supplied, so leaf wetness is not used in that assessment.</li>
+    <li>“Favourable” means all entered/applicable threshold conditions are met. It is a weather-based favourability indicator, not a prediction that infection or symptoms will certainly occur. Inoculum, crop stage, cultivar, canopy conditions and fungicide history are not included.</li>
+    <li>Solar radiation is displayed for monitoring but is not used in disease classification because no disease-specific threshold was supplied.</li>
+  </ul>
+</section>
+</main>
+<footer>Prototype decision-support tool. Verify API forecasts against local vineyard observations before operational disease-management decisions.</footer>
+
+<script>
+const API_BASE = "https://api.open-meteo.com/v1/forecast";
+let forecastRows = [];
+
+function fmt(v, digits=1){ return (v===null || v===undefined || Number.isNaN(Number(v))) ? "—" : Number(v).toFixed(digits); }
+function dateLabel(iso){
+  const d = new Date(iso+"T00:00:00");
+  return d.toLocaleDateString(undefined,{weekday:"short",day:"2-digit",month:"short"});
+}
+function numOrNull(value){
+  if(value===null || value===undefined || String(value).trim()==="") return null;
+  const n=Number(value); return Number.isFinite(n)?n:null;
+}
+async function fetchForecast(){
+  const btn=document.getElementById("fetchBtn"), status=document.getElementById("apiStatus");
+  const lat=numOrNull(document.getElementById("lat").value), lon=numOrNull(document.getElementById("lon").value);
+  if(lat===null || lon===null || lat < -90 || lat > 90 || lon < -180 || lon > 180){
+    status.textContent="Enter valid latitude (−90 to 90) and longitude (−180 to 180).";status.className="status error";return;
+  }
+  btn.disabled=true;btn.textContent="Fetching…";status.textContent="Contacting Open-Meteo…";status.className="status";
+  const params=new URLSearchParams({
+    latitude:lat,longitude:lon,
+    daily:"temperature_2m_min,temperature_2m_mean,temperature_2m_max,relative_humidity_2m_min,relative_humidity_2m_mean,relative_humidity_2m_max,precipitation_sum,shortwave_radiation_sum",
+    forecast_days:"5",timezone:"auto"
+  });
+  try{
+    const response=await fetch(API_BASE+"?"+params.toString());
+    if(!response.ok) throw new Error("Weather API returned HTTP "+response.status);
+    const data=await response.json();
+    if(!data.daily || !data.daily.time) throw new Error("The API response did not contain daily forecast data.");
+    forecastRows=data.daily.time.map((date,i)=>({
+      date,
+      tmin:data.daily.temperature_2m_min?.[i]??null,
+      tmean:data.daily.temperature_2m_mean?.[i]??null,
+      tmax:data.daily.temperature_2m_max?.[i]??null,
+      rhmin:data.daily.relative_humidity_2m_min?.[i]??null,
+      rhmean:data.daily.relative_humidity_2m_mean?.[i]??null,
+      rhmax:data.daily.relative_humidity_2m_max?.[i]??null,
+      rain:data.daily.precipitation_sum?.[i]??null,
+      solar:data.daily.shortwave_radiation_sum?.[i]??null
+    }));
+    renderWeather();
+    status.textContent="Forecast successfully fetched for "+(document.getElementById("place").value||"selected location")+". API time zone: "+(data.timezone||"automatic")+". Forecast values may be updated by the provider.";
+    assessDiseases();
+  }catch(err){
+    status.textContent="Could not fetch forecast: "+err.message+". Check your internet connection and try again.";
+    status.className="status error";
+  }finally{btn.disabled=false;btn.textContent="Fetch 5-day forecast";}
+}
+function renderWeather(){
+  const body=document.getElementById("weatherBody");
+  body.innerHTML=forecastRows.map((r,i)=>`<tr>
+    <td class="day">${dateLabel(r.date)}</td>
+    <td>${fmt(r.tmin)}</td><td>${fmt(r.tmean)}</td><td>${fmt(r.tmax)}</td>
+    <td>${fmt(r.rhmin,0)}</td><td>${fmt(r.rhmean,0)}</td><td>${fmt(r.rhmax,0)}</td>
+    <td>${fmt(r.rain)}</td><td>${fmt(r.solar)}</td>
+  </tr>`).join("");
+}
+function overlap(aMin,aMax,bMin,bMax){return aMin!==null&&aMax!==null&&aMax>=bMin&&aMin<=bMax;}
+function evaluate(row, disease){
+  const tests=[];
+  const temp=(lo,hi)=>tests.push({name:"Average temperature",ok:row.tmean!==null&&row.tmean>=lo&&row.tmean<=hi,known:row.tmean!==null,detail:`${lo}–${hi}°C; daily average ${fmt(row.tmean)}°C`});
+  const rhMin=(threshold)=>tests.push({name:"Average relative humidity",ok:row.rhmean!==null&&row.rhmean>=threshold,known:row.rhmean!==null,detail:`≥${threshold}%; daily average ${fmt(row.rhmean,0)}%`});
+  const rainAtLeast=(threshold)=>tests.push({name:"Daily rainfall",ok:row.rain!==null&&row.rain>=threshold,known:row.rain!==null,detail:`≥${threshold} mm; forecast ${fmt(row.rain)} mm`});
+  if(disease==="Anthracnose"){
+    temp(24,26);rhMin(80);
+  }else if(disease==="Downy mildew"){
+    temp(17,28);rhMin(70);rainAtLeast(10);
+  }else if(disease==="Bacterial leaf spot"){
+    temp(20,30);rhMin(80);rainAtLeast(10);
+  }else{
+    temp(21,30);
+    tests.push({name:"Average relative humidity",ok:row.rhmean!==null&&row.rhmean>=60&&row.rhmean<=85,known:row.rhmean!==null,detail:`60–85%; daily average ${fmt(row.rhmean,0)}%`});
+    tests.push({name:"Daily rainfall",ok:row.rain!==null&&row.rain<10,known:row.rain!==null,detail:`<10 mm; forecast ${fmt(row.rain)} mm`});
+  }
+  const known=tests.filter(t=>t.known), met=known.filter(t=>t.ok).length;
+  let status,cls;
+  if(known.length===0){status="Insufficient data";cls="unknown";}
+  else if(known.length<tests.length){status="Incomplete data";cls="unknown";}
+  else if(met===tests.length){status="Favourable";cls="favourable";}
+  else if(met>0){status="Partially favourable";cls="partial";}
+  else{status="Not favourable";cls="not";}
+  return {tests,status,cls,met,total:tests.length,known:known.length};
+}
+function assessDiseases(){
+  if(!forecastRows.length){document.getElementById("diseaseResults").innerHTML='<div class="muted">Fetch the forecast first.</div>';return;}
+  const diseases=["Anthracnose","Downy mildew","Bacterial leaf spot","Powdery mildew"];
+  document.getElementById("diseaseResults").innerHTML=diseases.map(d=>{
+    const cards=forecastRows.map(r=>{
+      const e=evaluate(r,d);
+      return `<div style="padding:8px 0;border-top:1px solid var(--line)">
+        <div class="disease-head"><strong>${dateLabel(r.date)}</strong><span class="pill ${e.cls}">${e.status}</span></div>
+        <div class="hint">${e.met}/${e.total} criteria met${e.known<e.total?`; ${e.total-e.known} criterion/criteria missing`:""}</div>
+        <details style="margin-top:5px"><summary class="hint">View criteria</summary><ul class="hint">${e.tests.map(t=>`<li>${t.name}: ${t.known?(t.ok?"Met":"Not met"):"Missing"} — ${t.detail}</li>`).join("")}</ul></details>
+      </div>`;
+    }).join("");
+    return `<article class="disease"><div class="disease-head"><h3>${d}</h3></div>${cards}</article>`;
+  }).join("");
+}
+function csvEscape(v){return '"'+String(v??"").replaceAll('"','""')+'"';}
+function downloadCSV(){
+  if(!forecastRows.length){alert("Fetch the five-day forecast first.");return;}
+  const headers=["Date","Min temperature (C)","Average temperature (C)","Max temperature (C)","Min RH (%)","Average RH (%)","Max RH (%)","Rainfall (mm)","Solar radiation (MJ/m2/day)"];
+  const rows=[headers];
+  forecastRows.forEach(r=>rows.push([r.date,r.tmin,r.tmean,r.tmax,r.rhmin,r.rhmean,r.rhmax,r.rain,r.solar]));
+  rows.push([]);
+  rows.push(["Disease assessment"]);
+  rows.push(["Date","Disease","Status","Criteria met","Total criteria","Criteria details"]);
+  ["Anthracnose","Downy mildew","Bacterial leaf spot","Powdery mildew"].forEach(d=>forecastRows.forEach(r=>{
+    const e=evaluate(r,d);
+    rows.push([r.date,d,e.status,e.met,e.total,e.tests.map(t=>`${t.name}: ${t.known?(t.ok?"Met":"Not met"):"Missing"}`).join("; ")]);
+  }));
+  const csv="\uFEFF"+rows.map(row=>row.map(csvEscape).join(",")).join("\r\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="grape_disease_5_day_forecast.csv";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
