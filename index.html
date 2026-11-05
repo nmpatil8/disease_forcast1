@@ -75,8 +75,9 @@ footer{max-width:1220px;margin:0 auto;padding:0 18px 28px;color:var(--muted);fon
   </div>
 </section>
 
+
 <section class="panel">
-  <h2>5. Interpretation and limitations</h2>
+  <h2>4. Interpretation and limitations</h2>
   <ul class="hint">
     <li>Temperature thresholds are evaluated using the API's daily average temperature. Minimum and maximum temperatures are displayed for reference only and do not determine disease favourability.</li>
     <li>Relative-humidity thresholds are evaluated using the API's daily average RH. Minimum and maximum RH are displayed for reference only and do not determine disease favourability.</li>
@@ -154,7 +155,7 @@ function evaluate(row, disease){
   const rhMin=(threshold)=>tests.push({name:"Average relative humidity",ok:row.rhmean!==null&&row.rhmean>=threshold,known:row.rhmean!==null,detail:`≥${threshold}%; daily average ${fmt(row.rhmean,0)}%`});
   const rainAtLeast=(threshold)=>tests.push({name:"Daily rainfall",ok:row.rain!==null&&row.rain>=threshold,known:row.rain!==null,detail:`≥${threshold} mm; forecast ${fmt(row.rain)} mm`});
   if(disease==="Anthracnose"){
-    temp(24,26);rhMin(80);
+    temp(24,26);rhMin(80);rainAtLeast(10);
   }else if(disease==="Downy mildew"){
     temp(17,28);rhMin(70);rainAtLeast(10);
   }else if(disease==="Bacterial leaf spot"){
